@@ -539,6 +539,47 @@ namespace Microsoft.Extensions.Caching.Memory
             }
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task GetOrCreatePopulates_ExpirationTokens_IntoScopedLink(bool trackLinkedCacheEntries)
+        {
+            var cache = CreateCache(trackLinkedCacheEntries);
+            var obj = new object();
+            var obj1 = new object();
+            string key = "myKey";
+            string key1 = "myKey1";
+
+            ICacheEntry entry;
+            using (entry = cache.CreateEntry(key))
+            {
+                VerifyCurrentEntry(trackLinkedCacheEntries, entry);
+
+                var expirationToken = new TestExpirationToken() { ActiveChangeCallbacks = true };
+                
+                cache.GetOrCreate(key, () => {
+                    return obj;
+                }, new MemoryCacheEntryOptions().AddExpirationToken(expirationToken));
+            }
+
+            ICacheEntry entry1;
+            using (entry1 = cache.CreateEntry(key1))
+            {
+                VerifyCurrentEntry(trackLinkedCacheEntries, entry1);
+
+                var expirationToken = new TestExpirationToken() { ActiveChangeCallbacks = true };
+                
+                await cache.GetOrCreateAsync(key1, () => {
+                    return obj1;
+                }, new MemoryCacheEntryOptions().AddExpirationToken(expirationToken));
+            }
+
+            Assert.Equal(trackLinkedCacheEntries ? 1 : 0, entry.ExpirationTokens.Count);
+            Assert.Null(entry.AbsoluteExpiration);
+            Assert.Equal(trackLinkedCacheEntries ? 1 : 0, entry1.ExpirationTokens.Count);
+            Assert.Null(entry1.AbsoluteExpiration);
+        }
+
         private static void VerifyCurrentEntry(bool trackLinkedCacheEntries, ICacheEntry entry)
         {
             if (trackLinkedCacheEntries)
